@@ -7,6 +7,13 @@
 #include "SFS_GlobalTypes.h"
 #include "SFSInventoryManager.generated.h"
 
+UENUM(BlueprintType)
+enum class EInventoryAction : uint8
+{
+	AddItem,
+	RemoveItem,
+	MoveItem,
+};
 
 USTRUCT()
 struct FInventoryStruct
@@ -43,10 +50,22 @@ protected:
 
 	class USFSItemBase* GenerateItemObject(TSubclassOf<USFSItemBase> ItemClass);
 
+	bool AddItemToInventory(USFSItemBase* ItemToAdd, int32 Quantity = 1);
+	bool AddItemToInventory(TSubclassOf<USFSItemBase> ItemClassToAdd, int32 QuantityToAdd = 1);
+
+	void RemoveItemFromInventory(int32 IndexRef, int32 QuantityToRemove);
+
+	bool FindEmptySlot(int32& IndexRef);
+
+	bool FindValidStack(TSubclassOf<USFSItemBase> ItemClassToAdd, int32& IndexRef, int32 QuantityToAdd = 1);
+
+	UFUNCTION(Server, Reliable, WithValidation)
+	void Server_PerformInventoryAction(EInventoryAction InventoryAction, int32 FirstIndex, int32 SecondIndex = -1, int32 Quantity = 1, AActor* Container = nullptr);
+
 public:	
 
+	void RequestInventoryAction(EInventoryAction InventoryAction, int32 FirstIndex, int32 SecondIndex = -1, int32 Quantity = 1, AActor* Container = nullptr);
 
-
-		
+	void AttemptItemPickup(AActor* ItemActor);
 	
 };

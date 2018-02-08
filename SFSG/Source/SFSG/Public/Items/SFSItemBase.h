@@ -10,7 +10,7 @@
 /**
  * 
  */
-UCLASS()
+UCLASS(Blueprintable)
 class SFSG_API USFSItemBase : public UObject
 {
 	GENERATED_BODY()
@@ -31,6 +31,12 @@ protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Item Properties")
 	class UTexture2D* ItemIcon;
 
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Item Properties")
+	bool bIsWorldItem;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Item Properties", meta = (EditCondition = bIsWorldItem))
+	class UStaticMesh* WorldMesh;
+
 	/** Does this item stack */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Item Properties")
 	bool bIsStackable;
@@ -44,11 +50,13 @@ protected:
 	EItemCategory ItemCategory;
 	
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Item Properties")
-	bool bHasDynamicProperties;
+	bool bHasComplexProperties;
 
 	/** Allow dynamic addition of extra item properties */
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Item Properties", meta = (Editcondition = bHasDynamicProperties))
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Item Properties", meta = (Editcondition = bHasComplexProperties))
 	TArray<FItemProperties> ItemProperties;
+
+
 
 public:
 
@@ -58,4 +66,7 @@ public:
 	/** Populates the item properties for item instance */
 	void InitializeComplexProperties();
 
+	int32 GetMaxStackSize();
+
+	int32 GetPropertyValue(EItemPropertyType ItemProperty);
 };
