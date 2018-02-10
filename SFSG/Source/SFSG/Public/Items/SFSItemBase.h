@@ -7,9 +7,18 @@
 #include "SFS_GlobalTypes.h"
 #include "SFSItemBase.generated.h"
 
-/**
- * 
- */
+USTRUCT(BlueprintType)
+struct FInvData
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadOnly, Category = "Inventory")
+	FText DisplayName;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Inventory")
+	UTexture2D* Icon;
+};
+
 UCLASS(Blueprintable)
 class SFSG_API USFSItemBase : public UObject
 {
@@ -57,7 +66,6 @@ protected:
 	TArray<FItemProperties> ItemProperties;
 
 
-
 public:
 
 	/** Flag for initialization state of complex item properties */
@@ -69,4 +77,9 @@ public:
 	int32 GetMaxStackSize();
 
 	int32 GetPropertyValue(EItemPropertyType ItemProperty);
+
+	UStaticMesh* GetWorldMesh();
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory")
+	FInvData GetInvData();
 };

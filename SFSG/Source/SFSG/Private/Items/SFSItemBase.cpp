@@ -3,8 +3,6 @@
 #include "SFSItemBase.h"
 
 
-
-
 void USFSItemBase::InitializeComplexProperties()
 {
 	// Stuff will go here.
@@ -26,4 +24,25 @@ int32 USFSItemBase::GetPropertyValue(EItemPropertyType ItemProperty)
 	}
 
 	return -1;
+}
+
+UStaticMesh* USFSItemBase::GetWorldMesh()
+{
+	if (WorldMesh)
+	{
+		return WorldMesh;
+	}
+	else
+	{
+		return nullptr;
+	}
+}
+
+FInvData USFSItemBase::GetInvData()
+{
+	FInvData InvData;
+	InvData.DisplayName = ItemDisplayName;
+	InvData.Icon = ItemIcon;
+
+	return InvData;
 }

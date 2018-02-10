@@ -5,6 +5,8 @@
 #include "Components/CapsuleComponent.h"
 #include "Components/InputComponent.h"
 #include "Camera/CameraComponent.h"
+#include "SFSInteractionComponent.h"
+#include "SFSWorldItemActor.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/SpringArmComponent.h"
 
@@ -39,7 +41,8 @@ ASFSCharacter::ASFSCharacter()
 	FollowCamera->SetupAttachment(CameraBoom, USpringArmComponent::SocketName); // Attach the camera to the end of the boom and let the boom adjust to match the controller orientation
 	FollowCamera->bUsePawnControlRotation = false; // Camera does not rotate relative to arm
 
-	InventoryManager = CreateDefaultSubobject<USFSInventoryManager>(TEXT("Inventory Manager"));
+	InventoryManager = CreateDefaultSubobject<USFSInventoryManager>(TEXT("InventoryManager"));
+	InteractionComponent = CreateDefaultSubobject<USFSInteractionComponent>(TEXT("InteractionComponent"));
 
 }
 
@@ -85,6 +88,11 @@ void ASFSCharacter::MoveRight(float Value)
 	}
 }
 
+void ASFSCharacter::Interact()
+{
+	InteractionComponent->Interact();
+}
+
 // Called every frame
 void ASFSCharacter::Tick(float DeltaTime)
 {
@@ -103,10 +111,18 @@ void ASFSCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCompon
 	PlayerInputComponent->BindAction("Jump", IE_Pressed, this, &ACharacter::Jump);
 	PlayerInputComponent->BindAction("Jump", IE_Released, this, &ACharacter::StopJumping);
 
+	PlayerInputComponent->BindAction("Interact", IE_Pressed, this, &ASFSCharacter::Interact);
+
 	PlayerInputComponent->BindAxis("MoveForward", this, &ASFSCharacter::MoveForward);
 	PlayerInputComponent->BindAxis("MoveRight", this, &ASFSCharacter::MoveRight);
 
 	PlayerInputComponent->BindAxis("Turn", this, &APawn::AddControllerYawInput);
 	PlayerInputComponent->BindAxis("LookUp", this, &APawn::AddControllerPitchInput);
+}
+
+void ASFSCharacter::GetTraceVectors(FVector& Start, FVector& End)
+{
+	Start = GetFollowCamera()->GetComponentLocation();
+	End = Start + (GetControlRotation().Vector() * 10000);
 }
 

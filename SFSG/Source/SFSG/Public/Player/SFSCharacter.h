@@ -27,6 +27,9 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
 	class USFSInventoryManager* InventoryManager;
 
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
+	class USFSInteractionComponent* InteractionComponent;
+
 protected:
 
 	class ASFSPlayerController* PlayerController;
@@ -40,6 +43,9 @@ protected:
 	/** Called for side to side input */
 	void MoveRight(float Value);
 
+	/** Attempts to interact with world objects */
+	void Interact();
+
 public:	
 	// Called every frame
 	virtual void Tick(float DeltaTime) override;
@@ -47,9 +53,12 @@ public:
 	// Called to bind functionality to input
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
 
+	void GetTraceVectors(FVector& Start, FVector& End);
+
 	/** Returns CameraBoom subobject **/
 	FORCEINLINE class USpringArmComponent* GetCameraBoom() const { return CameraBoom; }
 	/** Returns FollowCamera subobject **/
 	FORCEINLINE class UCameraComponent* GetFollowCamera() const { return FollowCamera; }
-	
+	/** Returns InventoryManager subobject **/
+	FORCEINLINE class USFSInventoryManager* GetInventoryComp() const { return InventoryManager; }
 };

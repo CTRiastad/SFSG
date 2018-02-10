@@ -1,18 +1,15 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 #include "SFSInventoryManager.h"
+#include "SFSWorldItemActor.h"
 #include "SFSItemBase.h"
 #include "Net/UnrealNetwork.h"
 
 // Sets default values for this component's properties
 USFSInventoryManager::USFSInventoryManager()
 {
-	// Set this component to be initialized when the game starts, and to be ticked every frame.  You can turn these features
-	// off to improve performance if you don't need them.
-	PrimaryComponentTick.bCanEverTick = false;
-
 	InventorySize = 20;
-
+	SetIsReplicated(true);
 }
 
 
@@ -20,9 +17,8 @@ USFSInventoryManager::USFSInventoryManager()
 void USFSInventoryManager::BeginPlay()
 {
 	Super::BeginPlay();
-
-	InitializeArray();
 	
+	InitializeArray();
 }
 
 void USFSInventoryManager::InitializeArray()
@@ -37,6 +33,7 @@ void USFSInventoryManager::InitializeArray()
 void USFSInventoryManager::ClearElementAtIndex(int32 IndexRef)
 {
 	InvArray[IndexRef].ItemInstance = nullptr;
+	InvArray[IndexRef].ItemInstance = 0;
 
 }
 
@@ -52,15 +49,18 @@ bool USFSInventoryManager::AddItemToInventory(USFSItemBase* ItemToAdd, int32 Qua
 	{
 		InvArray[IndexRef].ItemInstance = ItemToAdd;
 		InvArray[IndexRef].Quantity = QuantityToAdd;
+		Client_UpdateItem(IndexRef, InvArray[IndexRef]);
 		return true;
 	}
+
 	if (FindEmptySlot(IndexRef))
 	{
 		InvArray[IndexRef].ItemInstance = ItemToAdd;
 		InvArray[IndexRef].Quantity = QuantityToAdd;
-		
+		Client_UpdateItem(IndexRef, InvArray[IndexRef]);
 		return true;
 	}
+
 	return false;
 }
 
@@ -70,14 +70,34 @@ bool USFSInventoryManager::AddItemToInventory(TSubclassOf<USFSItemBase> ItemClas
 	if (FindValidStack(ItemClassToAdd, IndexRef, QuantityToAdd))
 	{
 		InvArray[IndexRef].Quantity += QuantityToAdd;
+		Client_UpdateItem(IndexRef, InvArray[IndexRef]);
 		return true;
 	}
+
 	if (FindEmptySlot(IndexRef))
 	{
 		InvArray[IndexRef].ItemInstance = GenerateItemObject(ItemClassToAdd);
 		InvArray[IndexRef].Quantity = QuantityToAdd;
+		Client_UpdateItem(IndexRef, InvArray[IndexRef]);
+		return true;
 	}
+
 	return false;
+}
+
+void USFSInventoryManager::RemoveItemFromInventory(int32 IndexRef, int32 QuantityToRemove)
+{
+	if (InvArray[IndexRef].ItemInstance)
+	{
+		if (InvArray[IndexRef].Quantity - QuantityToRemove > 0)
+		{
+			InvArray[IndexRef].Quantity -= QuantityToRemove;
+		}
+		else
+		{
+			ClearElementAtIndex(IndexRef);
+		}
+	}
 }
 
 bool USFSInventoryManager::FindEmptySlot(int32& IndexRef)
@@ -95,19 +115,50 @@ bool USFSInventoryManager::FindValidStack(TSubclassOf<USFSItemBase> ItemClassToA
 	return (IndexRef != -1);
 }
 
+void USFSInventoryManager::Server_AttemptItemPickup_Implementation(ASFSWorldItemActor* ItemActor)
+{
+	AttemptItemPickup(ItemActor);
+}
+
+bool USFSInventoryManager::Server_AttemptItemPickup_Validate(ASFSWorldItemActor* ItemActor)
+{
+	return true;
+}
+
+void USFSInventoryManager::Client_UpdateItem_Implementation(int32 IndexRef, const FInventoryStruct& ElementValue)
+{
+	UE_LOG(LogTemp, Log, TEXT("Client Update"))
+	InvArray[IndexRef] = ElementValue;
+	UpdateClientEvent.Broadcast(IndexRef);
+}
+
 void USFSInventoryManager::RequestInventoryAction(EInventoryAction InventoryAction, int32 FirstIndex, int32 SecondIndex /*= -1*/, int32 Quantity /*= 1*/, AActor* Container /*= nullptr*/)
 {
 	Server_PerformInventoryAction(InventoryAction, FirstIndex, SecondIndex, Quantity, Container);
 }
 
-void USFSInventoryManager::AttemptItemPickup(AActor* ItemActor)
+void USFSInventoryManager::AttemptItemPickup(ASFSWorldItemActor* ItemActor)
 {
+	if (GetOwnerRole() < ROLE_Authority)
+	{
+		Server_AttemptItemPickup(ItemActor);
+		return;
+	}
 
+	if (AddItemToInventory(ItemActor->GetItemClass()))
+	{
+		// ItemActor->Destroy();
+	}
+}
+
+FInventoryStruct& USFSInventoryManager::GetInventoryStruct(int32 IndexRef)
+{
+	return InvArray[IndexRef];
 }
 
 void USFSInventoryManager::Server_PerformInventoryAction_Implementation(EInventoryAction InventoryAction, int32 FirstIndex, int32 SecondIndex /*= -1*/, int32 Quantity /*= 1*/, AActor* Container /*= nullptr*/)
 {
-
+	
 }
 
 bool USFSInventoryManager::Server_PerformInventoryAction_Validate(EInventoryAction InventoryAction, int32 FirstIndex, int32 SecondIndex /*= -1*/, int32 Quantity /*= 1*/, AActor* Container /*= nullptr*/)

@@ -7,6 +7,8 @@
 #include "SFS_GlobalTypes.h"
 #include "SFSInventoryManager.generated.h"
 
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FInventoryUpdateSignature, int32, UpdatedSlot);
+
 UENUM(BlueprintType)
 enum class EInventoryAction : uint8
 {
@@ -15,15 +17,15 @@ enum class EInventoryAction : uint8
 	MoveItem,
 };
 
-USTRUCT()
+USTRUCT(BlueprintType)
 struct FInventoryStruct
 {
 	GENERATED_BODY()
 
-	UPROPERTY()
+	UPROPERTY(BlueprintReadOnly, Category = "Inventory")
 	class USFSItemBase* ItemInstance;
 
-	UPROPERTY()
+	UPROPERTY(BlueprintReadOnly, Category = "Inventory")
 	int32 Quantity;
 };
 
@@ -59,13 +61,25 @@ protected:
 
 	bool FindValidStack(TSubclassOf<USFSItemBase> ItemClassToAdd, int32& IndexRef, int32 QuantityToAdd = 1);
 
+	UFUNCTION(Client, Reliable)
+	void Client_UpdateItem(int32 IndexRef, const FInventoryStruct& ElementValue);
+
 	UFUNCTION(Server, Reliable, WithValidation)
 	void Server_PerformInventoryAction(EInventoryAction InventoryAction, int32 FirstIndex, int32 SecondIndex = -1, int32 Quantity = 1, AActor* Container = nullptr);
+
+	UFUNCTION(Server, Reliable, WithValidation)
+	void Server_AttemptItemPickup(class ASFSWorldItemActor* ItemActor);
 
 public:	
 
 	void RequestInventoryAction(EInventoryAction InventoryAction, int32 FirstIndex, int32 SecondIndex = -1, int32 Quantity = 1, AActor* Container = nullptr);
 
-	void AttemptItemPickup(AActor* ItemActor);
+	void AttemptItemPickup(class ASFSWorldItemActor* ItemActor);
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory")
+	FInventoryStruct& GetInventoryStruct(int32 IndexRef);
 	
+	UPROPERTY(BlueprintAssignable, Category = "Inventory")
+	FInventoryUpdateSignature UpdateClientEvent;
+
 };

@@ -23,6 +23,6 @@ class SFSG_API ISFS_InteractionInterface
 public:
 	
 	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "Interaction")
-	bool OnInteractionEvent();
+	bool OnInteractionEvent(AActor* InteractingActor);
 
 };
