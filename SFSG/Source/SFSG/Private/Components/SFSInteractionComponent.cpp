@@ -91,6 +91,7 @@ void USFSInteractionComponent::Interact()
 	if (GetOwnerRole() < ROLE_Authority)
 	{
 		Server_Interact();
+		return;
 	}
 
 	UObject* pointerToAnyObject = HitResult.GetActor();

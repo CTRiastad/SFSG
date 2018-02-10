@@ -37,7 +37,7 @@ void USFSInventoryManager::ClearElementAtIndex(int32 IndexRef)
 
 }
 
-class USFSItemBase* USFSInventoryManager::GenerateItemObject(TSubclassOf<USFSItemBase> ItemClass)
+USFSItemBase* USFSInventoryManager::GenerateItemObject(TSubclassOf<USFSItemBase> ItemClass)
 {
 	return NewObject<USFSItemBase>(this, ItemClass);
 }
@@ -49,15 +49,15 @@ bool USFSInventoryManager::AddItemToInventory(USFSItemBase* ItemToAdd, int32 Qua
 	{
 		InvArray[IndexRef].ItemInstance = ItemToAdd;
 		InvArray[IndexRef].Quantity = QuantityToAdd;
-		Client_UpdateItem(IndexRef, InvArray[IndexRef]);
+		Client_AddItem(IndexRef, QuantityToAdd);
 		return true;
 	}
 
 	if (FindEmptySlot(IndexRef))
 	{
-		InvArray[IndexRef].ItemInstance = ItemToAdd;
+		InvArray[IndexRef].ItemInstance = GenerateItemObject(ItemToAdd->GetClass());
 		InvArray[IndexRef].Quantity = QuantityToAdd;
-		Client_UpdateItem(IndexRef, InvArray[IndexRef]);
+		Client_AddItem(IndexRef, QuantityToAdd, ItemToAdd->GetClass());
 		return true;
 	}
 
@@ -70,7 +70,7 @@ bool USFSInventoryManager::AddItemToInventory(TSubclassOf<USFSItemBase> ItemClas
 	if (FindValidStack(ItemClassToAdd, IndexRef, QuantityToAdd))
 	{
 		InvArray[IndexRef].Quantity += QuantityToAdd;
-		Client_UpdateItem(IndexRef, InvArray[IndexRef]);
+		Client_AddItem(IndexRef, QuantityToAdd);
 		return true;
 	}
 
@@ -78,11 +78,27 @@ bool USFSInventoryManager::AddItemToInventory(TSubclassOf<USFSItemBase> ItemClas
 	{
 		InvArray[IndexRef].ItemInstance = GenerateItemObject(ItemClassToAdd);
 		InvArray[IndexRef].Quantity = QuantityToAdd;
-		Client_UpdateItem(IndexRef, InvArray[IndexRef]);
+		Client_AddItem(IndexRef, QuantityToAdd, ItemClassToAdd);
 		return true;
 	}
 
 	return false;
+}
+
+void USFSInventoryManager::Client_AddItem_Implementation(int32 IndexRef, int32 QuantityToAdd /*= 1*/, TSubclassOf<USFSItemBase> ItemClass /*= nullptr*/)
+{
+	if (ItemClass)
+	{
+		InvArray[IndexRef].ItemInstance = GenerateItemObject(ItemClass);
+		InvArray[IndexRef].Quantity = QuantityToAdd;
+	}
+	else
+	{
+		InvArray[IndexRef].Quantity += QuantityToAdd;
+	}
+
+
+	UpdateClientEvent.Broadcast(IndexRef);
 }
 
 void USFSInventoryManager::RemoveItemFromInventory(int32 IndexRef, int32 QuantityToRemove)
@@ -98,6 +114,46 @@ void USFSInventoryManager::RemoveItemFromInventory(int32 IndexRef, int32 Quantit
 			ClearElementAtIndex(IndexRef);
 		}
 	}
+}
+
+void USFSInventoryManager::SwapItems(int32 FirstIndexRef, int32 SecondIndexRef)
+{
+	InvArray.Swap(FirstIndexRef, SecondIndexRef);
+	Client_SwapItem(FirstIndexRef, SecondIndexRef);
+}
+
+void USFSInventoryManager::SplitStack(int32 IndexRef, int32 QuantityToSplit)
+{
+	int32 NewIndexRef;
+	if (FindEmptySlot(NewIndexRef))
+	{
+		InvArray[NewIndexRef].ItemInstance = InvArray[IndexRef].ItemInstance;
+		InvArray[NewIndexRef].Quantity = QuantityToSplit;
+		RemoveItemFromInventory(IndexRef, QuantityToSplit);
+
+		Client_AddItem(NewIndexRef, QuantityToSplit, InvArray[IndexRef].ItemInstance->GetClass());
+		Client_RemoveItem(IndexRef, QuantityToSplit);
+	}
+}
+
+void USFSInventoryManager::Client_SwapItem_Implementation(int32 FirstIndexRef, int32 SecondIndexRef)
+{
+	InvArray.Swap(FirstIndexRef, SecondIndexRef);
+	UpdateClientEvent.Broadcast(FirstIndexRef);
+	UpdateClientEvent.Broadcast(SecondIndexRef);
+}
+
+void USFSInventoryManager::Client_RemoveItem_Implementation(int32 IndexRef, int32 QuantityToRemove)
+{
+	if (InvArray[IndexRef].Quantity - QuantityToRemove > 0)
+	{
+		InvArray[IndexRef].Quantity -= QuantityToRemove;
+	}
+	else
+	{
+		ClearElementAtIndex(IndexRef);
+	}
+	UpdateClientEvent.Broadcast(IndexRef);
 }
 
 bool USFSInventoryManager::FindEmptySlot(int32& IndexRef)
@@ -117,19 +173,13 @@ bool USFSInventoryManager::FindValidStack(TSubclassOf<USFSItemBase> ItemClassToA
 
 void USFSInventoryManager::Server_AttemptItemPickup_Implementation(ASFSWorldItemActor* ItemActor)
 {
+	UE_LOG(LogTemp, Log, TEXT("AttemptItemPickup"))
 	AttemptItemPickup(ItemActor);
 }
 
 bool USFSInventoryManager::Server_AttemptItemPickup_Validate(ASFSWorldItemActor* ItemActor)
 {
 	return true;
-}
-
-void USFSInventoryManager::Client_UpdateItem_Implementation(int32 IndexRef, const FInventoryStruct& ElementValue)
-{
-	UE_LOG(LogTemp, Log, TEXT("Client Update"))
-	InvArray[IndexRef] = ElementValue;
-	UpdateClientEvent.Broadcast(IndexRef);
 }
 
 void USFSInventoryManager::RequestInventoryAction(EInventoryAction InventoryAction, int32 FirstIndex, int32 SecondIndex /*= -1*/, int32 Quantity /*= 1*/, AActor* Container /*= nullptr*/)
@@ -144,10 +194,9 @@ void USFSInventoryManager::AttemptItemPickup(ASFSWorldItemActor* ItemActor)
 		Server_AttemptItemPickup(ItemActor);
 		return;
 	}
-
 	if (AddItemToInventory(ItemActor->GetItemClass()))
 	{
-		// ItemActor->Destroy();
+		ItemActor->Destroy();
 	}
 }
 
@@ -158,7 +207,19 @@ FInventoryStruct& USFSInventoryManager::GetInventoryStruct(int32 IndexRef)
 
 void USFSInventoryManager::Server_PerformInventoryAction_Implementation(EInventoryAction InventoryAction, int32 FirstIndex, int32 SecondIndex /*= -1*/, int32 Quantity /*= 1*/, AActor* Container /*= nullptr*/)
 {
-	
+	switch (InventoryAction)
+	{
+	case EInventoryAction::RemoveItem:
+		RemoveItemFromInventory(FirstIndex, Quantity);
+		break;
+	case EInventoryAction::MoveItem:
+		SwapItems(FirstIndex, SecondIndex);
+		break;
+	case EInventoryAction::SplitStack:
+		SplitStack(FirstIndex, Quantity);
+	default:
+		break;
+	}
 }
 
 bool USFSInventoryManager::Server_PerformInventoryAction_Validate(EInventoryAction InventoryAction, int32 FirstIndex, int32 SecondIndex /*= -1*/, int32 Quantity /*= 1*/, AActor* Container /*= nullptr*/)

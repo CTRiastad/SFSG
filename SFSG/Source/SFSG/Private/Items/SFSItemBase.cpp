@@ -46,3 +46,13 @@ FInvData USFSItemBase::GetInvData()
 
 	return InvData;
 }
+
+bool USFSItemBase::IsNameStableForNetworking() const
+{
+	return true;
+}
+
+bool USFSItemBase::IsSupportedForNetworking() const
+{
+	return true;
+}

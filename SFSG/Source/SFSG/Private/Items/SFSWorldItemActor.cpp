@@ -45,6 +45,7 @@ TSubclassOf<USFSItemBase> ASFSWorldItemActor::GetItemClass()
 
 bool ASFSWorldItemActor::OnInteractionEvent_Implementation(AActor* InteractingActor)
 {
+
 	ASFSCharacter* InteractingChar = Cast<ASFSCharacter>(InteractingActor);
 	if (InteractingChar)
 	{

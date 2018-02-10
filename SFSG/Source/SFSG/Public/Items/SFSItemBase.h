@@ -82,4 +82,8 @@ public:
 
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory")
 	FInvData GetInvData();
+
+	virtual bool IsNameStableForNetworking() const override;
+
+	virtual bool IsSupportedForNetworking() const override;
 };
