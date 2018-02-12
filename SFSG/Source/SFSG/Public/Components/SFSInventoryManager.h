@@ -29,6 +29,28 @@ struct FInventoryStruct
 	int32 Quantity;
 };
 
+USTRUCT(BlueprintType)
+struct FInventoryActionData
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadWrite, Category = "Inventory")
+	EInventoryAction InventoryAction;
+
+	UPROPERTY(BlueprintReadWrite, Category = "Inventory")
+	int32 FirstIndexRef;
+
+	UPROPERTY(BlueprintReadWrite, Category = "Inventory")
+	int32 SecondIndexRef;
+
+	UPROPERTY(BlueprintReadWrite, Category = "Inventory")
+	int32 Quantity = 1;
+
+	UPROPERTY(BlueprintReadWrite, Category = "Inventory")
+	AActor* ContainerActor = nullptr;
+
+};
+
 UCLASS( ClassGroup=(Custom), meta=(BlueprintSpawnableComponent) )
 class SFSG_API USFSInventoryManager : public UActorComponent
 {
@@ -84,17 +106,16 @@ protected:
 	UFUNCTION(Client, Reliable)
 	void Client_SwapItem(int32 FirstIndexRef, int32 SecondIndexRef);
 
-	/** Server-authoritative inventory control function **/
-	UFUNCTION(Server, Reliable, WithValidation)
-	void Server_PerformInventoryAction(EInventoryAction InventoryAction, int32 FirstIndex, int32 SecondIndex = -1, int32 Quantity = 1, AActor* Container = nullptr);
-
 	/** Server-authoritative item pickup function **/
 	UFUNCTION(Server, Reliable, WithValidation)
 	void Server_AttemptItemPickup(class ASFSWorldItemActor* ItemActor);
 
+	UFUNCTION(Server, Reliable, WithValidation)
+	void Server_PerformInventoryAction(const FInventoryActionData& InventoryAction);
+
 public:	
 
-	void RequestInventoryAction(EInventoryAction InventoryAction, int32 FirstIndex, int32 SecondIndex = -1, int32 Quantity = 1, AActor* Container = nullptr);
+	void PerformInventoryAction(const FInventoryActionData& ActionRequest);
 
 	void AttemptItemPickup(class ASFSWorldItemActor* ItemActor);
 

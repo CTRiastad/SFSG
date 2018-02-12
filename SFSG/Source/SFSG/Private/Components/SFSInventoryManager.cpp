@@ -116,10 +116,30 @@ void USFSInventoryManager::RemoveItemFromInventory(int32 IndexRef, int32 Quantit
 	}
 }
 
+void USFSInventoryManager::Client_RemoveItem_Implementation(int32 IndexRef, int32 QuantityToRemove)
+{
+	if (InvArray[IndexRef].Quantity - QuantityToRemove > 0)
+	{
+		InvArray[IndexRef].Quantity -= QuantityToRemove;
+	}
+	else
+	{
+		ClearElementAtIndex(IndexRef);
+	}
+	UpdateClientEvent.Broadcast(IndexRef);
+}
+
 void USFSInventoryManager::SwapItems(int32 FirstIndexRef, int32 SecondIndexRef)
 {
 	InvArray.Swap(FirstIndexRef, SecondIndexRef);
 	Client_SwapItem(FirstIndexRef, SecondIndexRef);
+}
+
+void USFSInventoryManager::Client_SwapItem_Implementation(int32 FirstIndexRef, int32 SecondIndexRef)
+{
+	InvArray.Swap(FirstIndexRef, SecondIndexRef);
+	UpdateClientEvent.Broadcast(FirstIndexRef);
+	UpdateClientEvent.Broadcast(SecondIndexRef);
 }
 
 void USFSInventoryManager::SplitStack(int32 IndexRef, int32 QuantityToSplit)
@@ -134,26 +154,6 @@ void USFSInventoryManager::SplitStack(int32 IndexRef, int32 QuantityToSplit)
 		Client_AddItem(NewIndexRef, QuantityToSplit, InvArray[IndexRef].ItemInstance->GetClass());
 		Client_RemoveItem(IndexRef, QuantityToSplit);
 	}
-}
-
-void USFSInventoryManager::Client_SwapItem_Implementation(int32 FirstIndexRef, int32 SecondIndexRef)
-{
-	InvArray.Swap(FirstIndexRef, SecondIndexRef);
-	UpdateClientEvent.Broadcast(FirstIndexRef);
-	UpdateClientEvent.Broadcast(SecondIndexRef);
-}
-
-void USFSInventoryManager::Client_RemoveItem_Implementation(int32 IndexRef, int32 QuantityToRemove)
-{
-	if (InvArray[IndexRef].Quantity - QuantityToRemove > 0)
-	{
-		InvArray[IndexRef].Quantity -= QuantityToRemove;
-	}
-	else
-	{
-		ClearElementAtIndex(IndexRef);
-	}
-	UpdateClientEvent.Broadcast(IndexRef);
 }
 
 bool USFSInventoryManager::FindEmptySlot(int32& IndexRef)
@@ -171,20 +171,39 @@ bool USFSInventoryManager::FindValidStack(TSubclassOf<USFSItemBase> ItemClassToA
 	return (IndexRef != -1);
 }
 
-void USFSInventoryManager::Server_AttemptItemPickup_Implementation(ASFSWorldItemActor* ItemActor)
+void USFSInventoryManager::PerformInventoryAction(const FInventoryActionData& ActionRequest)
 {
-	UE_LOG(LogTemp, Log, TEXT("AttemptItemPickup"))
-	AttemptItemPickup(ItemActor);
+	if (GetOwnerRole() < ROLE_Authority)
+	{
+		Server_PerformInventoryAction(ActionRequest);
+		return;
+	}
+
+	switch (ActionRequest.InventoryAction)
+	{
+	case EInventoryAction::MoveItem:
+		SwapItems(ActionRequest.FirstIndexRef, ActionRequest.SecondIndexRef);
+		break;
+	case EInventoryAction::RemoveItem:
+		RemoveItemFromInventory(ActionRequest.FirstIndexRef, ActionRequest.Quantity);
+		break;
+	case EInventoryAction::SplitStack:
+		SplitStack(ActionRequest.FirstIndexRef, ActionRequest.Quantity);
+		break;
+	default:
+		break;
+	}
+
 }
 
-bool USFSInventoryManager::Server_AttemptItemPickup_Validate(ASFSWorldItemActor* ItemActor)
+void USFSInventoryManager::Server_PerformInventoryAction_Implementation(const FInventoryActionData& InventoryAction)
+{
+	PerformInventoryAction(InventoryAction);
+}
+
+bool USFSInventoryManager::Server_PerformInventoryAction_Validate(const FInventoryActionData& InventoryAction)
 {
 	return true;
-}
-
-void USFSInventoryManager::RequestInventoryAction(EInventoryAction InventoryAction, int32 FirstIndex, int32 SecondIndex /*= -1*/, int32 Quantity /*= 1*/, AActor* Container /*= nullptr*/)
-{
-	Server_PerformInventoryAction(InventoryAction, FirstIndex, SecondIndex, Quantity, Container);
 }
 
 void USFSInventoryManager::AttemptItemPickup(ASFSWorldItemActor* ItemActor)
@@ -200,29 +219,17 @@ void USFSInventoryManager::AttemptItemPickup(ASFSWorldItemActor* ItemActor)
 	}
 }
 
+void USFSInventoryManager::Server_AttemptItemPickup_Implementation(ASFSWorldItemActor* ItemActor)
+{
+	AttemptItemPickup(ItemActor);
+}
+
+bool USFSInventoryManager::Server_AttemptItemPickup_Validate(ASFSWorldItemActor* ItemActor)
+{
+	return true;
+}
+
 FInventoryStruct& USFSInventoryManager::GetInventoryStruct(int32 IndexRef)
 {
 	return InvArray[IndexRef];
-}
-
-void USFSInventoryManager::Server_PerformInventoryAction_Implementation(EInventoryAction InventoryAction, int32 FirstIndex, int32 SecondIndex /*= -1*/, int32 Quantity /*= 1*/, AActor* Container /*= nullptr*/)
-{
-	switch (InventoryAction)
-	{
-	case EInventoryAction::RemoveItem:
-		RemoveItemFromInventory(FirstIndex, Quantity);
-		break;
-	case EInventoryAction::MoveItem:
-		SwapItems(FirstIndex, SecondIndex);
-		break;
-	case EInventoryAction::SplitStack:
-		SplitStack(FirstIndex, Quantity);
-	default:
-		break;
-	}
-}
-
-bool USFSInventoryManager::Server_PerformInventoryAction_Validate(EInventoryAction InventoryAction, int32 FirstIndex, int32 SecondIndex /*= -1*/, int32 Quantity /*= 1*/, AActor* Container /*= nullptr*/)
-{
-	return true;
 }
