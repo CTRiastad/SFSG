@@ -15,6 +15,8 @@ enum class EInventoryAction : uint8
 	RemoveItem,
 	MoveItem,
 	SplitStack,
+	Use,
+	CombineStack,
 };
 
 USTRUCT(BlueprintType)
@@ -86,35 +88,36 @@ protected:
 	bool FindValidStack(TSubclassOf<USFSItemBase> ItemClassToAdd, int32& IndexRef, int32 QuantityToAdd = 1);
 
 	/** Decreases the quantity count of a stack, or clears an item from the inventory entirely **/
-	void RemoveItemFromInventory(int32 IndexRef, int32 QuantityToRemove);
+	void RemoveItemFromInventory(int32 IndexRef, int32 QuantityToRemove = 0);
 
 	/** Moves an item to a different inventory slot internally **/
 	void SwapItems(int32 FirstIndexRef, int32 SecondIndexRef);
+	
+	/** Activates or consumes an item to perform a given function **/
+	bool UseItem(int32 IndexRef);
+
+	/** Combines two existing stacks of the same item type **/
+	void CombineStack(int32 FirstIndexRef, int32 SecondIndexRef);
 
 	/** Splits an amount of an existing item stack into a new item stack **/
 	void SplitStack(int32 IndexRef, int32 QuantityToSplit);
-
-	/** Client RPC that manages the client-copy of the inventory **/
-	UFUNCTION(Client, Reliable)
-	void Client_RemoveItem(int32 IndexRef, int32 QuantityToRemove);
-
-	/** Client RPC that manages the client-copy of the inventory **/
-	UFUNCTION(Client, Reliable)
-	void Client_AddItem(int32 IndexRef, int32 QuantityToAdd = 1, TSubclassOf<USFSItemBase> ItemClass = nullptr);
-
-	/** Client RPC that manages the client-copy of the inventory **/
-	UFUNCTION(Client, Reliable)
-	void Client_SwapItem(int32 FirstIndexRef, int32 SecondIndexRef);
 
 	/** Server-authoritative item pickup function **/
 	UFUNCTION(Server, Reliable, WithValidation)
 	void Server_AttemptItemPickup(class ASFSWorldItemActor* ItemActor);
 
+	UFUNCTION(Client, Reliable)
+	void Client_AttemptItemPickup(class ASFSWorldItemActor* ItemActor);
+
 	UFUNCTION(Server, Reliable, WithValidation)
 	void Server_PerformInventoryAction(const FInventoryActionData& InventoryAction);
 
+	UFUNCTION(Client, Reliable)
+	void Client_PerformInventoryAction(const FInventoryActionData& InventoryAction);
+
 public:	
 
+	UFUNCTION(BlueprintCallable, Category = "Inventory")
 	void PerformInventoryAction(const FInventoryActionData& ActionRequest);
 
 	void AttemptItemPickup(class ASFSWorldItemActor* ItemActor);
@@ -127,4 +130,12 @@ public:
 	UPROPERTY(BlueprintAssignable, Category = "Inventory")
 	FInventoryUpdateSignature UpdateClientEvent;
 
+
+	FORCEINLINE void ClientUpdate(int32 IndexRef) 
+	{
+		if (GetOwnerRole() < ROLE_Authority)
+		{
+			UpdateClientEvent.Broadcast(IndexRef);
+		}
+	}
 };

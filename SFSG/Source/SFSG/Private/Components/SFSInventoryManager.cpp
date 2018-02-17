@@ -5,6 +5,14 @@
 #include "SFSItemBase.h"
 #include "Net/UnrealNetwork.h"
 
+static int32 DebugDestroyWorldItem = 0;
+FAutoConsoleVariableRef CVARDebugDestroyWorldItem(
+	TEXT("SFS.ConsumePickup"),
+	DebugDestroyWorldItem,
+	TEXT("Toggles the destruction of world item actors on pickup"),
+	ECVF_Default  	// ECVF_Cheat
+);
+
 // Sets default values for this component's properties
 USFSInventoryManager::USFSInventoryManager()
 {
@@ -49,7 +57,7 @@ bool USFSInventoryManager::AddItemToInventory(USFSItemBase* ItemToAdd, int32 Qua
 	{
 		InvArray[IndexRef].ItemInstance = ItemToAdd;
 		InvArray[IndexRef].Quantity = QuantityToAdd;
-		Client_AddItem(IndexRef, QuantityToAdd);
+		ClientUpdate(IndexRef);
 		return true;
 	}
 
@@ -57,7 +65,7 @@ bool USFSInventoryManager::AddItemToInventory(USFSItemBase* ItemToAdd, int32 Qua
 	{
 		InvArray[IndexRef].ItemInstance = GenerateItemObject(ItemToAdd->GetClass());
 		InvArray[IndexRef].Quantity = QuantityToAdd;
-		Client_AddItem(IndexRef, QuantityToAdd, ItemToAdd->GetClass());
+		ClientUpdate(IndexRef);
 		return true;
 	}
 
@@ -70,7 +78,7 @@ bool USFSInventoryManager::AddItemToInventory(TSubclassOf<USFSItemBase> ItemClas
 	if (FindValidStack(ItemClassToAdd, IndexRef, QuantityToAdd))
 	{
 		InvArray[IndexRef].Quantity += QuantityToAdd;
-		Client_AddItem(IndexRef, QuantityToAdd);
+		ClientUpdate(IndexRef);
 		return true;
 	}
 
@@ -78,33 +86,24 @@ bool USFSInventoryManager::AddItemToInventory(TSubclassOf<USFSItemBase> ItemClas
 	{
 		InvArray[IndexRef].ItemInstance = GenerateItemObject(ItemClassToAdd);
 		InvArray[IndexRef].Quantity = QuantityToAdd;
-		Client_AddItem(IndexRef, QuantityToAdd, ItemClassToAdd);
+		ClientUpdate(IndexRef);
 		return true;
 	}
 
 	return false;
 }
 
-void USFSInventoryManager::Client_AddItem_Implementation(int32 IndexRef, int32 QuantityToAdd /*= 1*/, TSubclassOf<USFSItemBase> ItemClass /*= nullptr*/)
-{
-	if (ItemClass)
-	{
-		InvArray[IndexRef].ItemInstance = GenerateItemObject(ItemClass);
-		InvArray[IndexRef].Quantity = QuantityToAdd;
-	}
-	else
-	{
-		InvArray[IndexRef].Quantity += QuantityToAdd;
-	}
-
-
-	UpdateClientEvent.Broadcast(IndexRef);
-}
-
-void USFSInventoryManager::RemoveItemFromInventory(int32 IndexRef, int32 QuantityToRemove)
+// If no quantity is specified, default behavior clears the array element.
+void USFSInventoryManager::RemoveItemFromInventory(int32 IndexRef, int32 QuantityToRemove /*= 0*/)
 {
 	if (InvArray[IndexRef].ItemInstance)
 	{
+		if (QuantityToRemove == 0)
+		{
+			ClearElementAtIndex(IndexRef);
+			return;
+		}
+
 		if (InvArray[IndexRef].Quantity - QuantityToRemove > 0)
 		{
 			InvArray[IndexRef].Quantity -= QuantityToRemove;
@@ -116,32 +115,44 @@ void USFSInventoryManager::RemoveItemFromInventory(int32 IndexRef, int32 Quantit
 	}
 }
 
-void USFSInventoryManager::Client_RemoveItem_Implementation(int32 IndexRef, int32 QuantityToRemove)
-{
-	if (InvArray[IndexRef].Quantity - QuantityToRemove > 0)
-	{
-		InvArray[IndexRef].Quantity -= QuantityToRemove;
-	}
-	else
-	{
-		ClearElementAtIndex(IndexRef);
-	}
-	UpdateClientEvent.Broadcast(IndexRef);
-}
-
 void USFSInventoryManager::SwapItems(int32 FirstIndexRef, int32 SecondIndexRef)
 {
 	InvArray.Swap(FirstIndexRef, SecondIndexRef);
-	Client_SwapItem(FirstIndexRef, SecondIndexRef);
 }
 
-void USFSInventoryManager::Client_SwapItem_Implementation(int32 FirstIndexRef, int32 SecondIndexRef)
+bool USFSInventoryManager::UseItem(int32 IndexRef)
 {
-	InvArray.Swap(FirstIndexRef, SecondIndexRef);
-	UpdateClientEvent.Broadcast(FirstIndexRef);
-	UpdateClientEvent.Broadcast(SecondIndexRef);
+	if (InvArray[IndexRef].ItemInstance)
+	{
+		InvArray[IndexRef].ItemInstance->OnUsed();
+		RemoveItemFromInventory(IndexRef, 1);  // TODO - Remove magic number
+		return true; // TODO - Add in Usable item check
+	}
+	return false;
 }
 
+void USFSInventoryManager::CombineStack(int32 FirstIndexRef, int32 SecondIndexRef)
+{
+	FInventoryStruct& DonorStack = InvArray[FirstIndexRef];
+	FInventoryStruct& TargetStack = InvArray[SecondIndexRef];
+
+	if (DonorStack.ItemInstance->GetClass()->IsChildOf(TargetStack.ItemInstance->GetClass()) && DonorStack.ItemInstance->GetMaxStackSize() > 1)
+	{
+		int32 RoomInStack = TargetStack.ItemInstance->GetMaxStackSize() - TargetStack.Quantity;
+		if (DonorStack.Quantity <= RoomInStack)
+		{
+			TargetStack.Quantity += DonorStack.Quantity;
+			RemoveItemFromInventory(FirstIndexRef);
+		}
+		else
+		{
+			TargetStack.Quantity += RoomInStack;
+			DonorStack.Quantity -= RoomInStack;
+		}
+	}
+}
+
+// The client-side actions of SplitStack are already covered by existing functions which makes the creation of a Client_SplitStack RPC superfluous.
 void USFSInventoryManager::SplitStack(int32 IndexRef, int32 QuantityToSplit)
 {
 	int32 NewIndexRef;
@@ -150,10 +161,45 @@ void USFSInventoryManager::SplitStack(int32 IndexRef, int32 QuantityToSplit)
 		InvArray[NewIndexRef].ItemInstance = InvArray[IndexRef].ItemInstance;
 		InvArray[NewIndexRef].Quantity = QuantityToSplit;
 		RemoveItemFromInventory(IndexRef, QuantityToSplit);
-
-		Client_AddItem(NewIndexRef, QuantityToSplit, InvArray[IndexRef].ItemInstance->GetClass());
-		Client_RemoveItem(IndexRef, QuantityToSplit);
 	}
+}
+
+void USFSInventoryManager::Client_AttemptItemPickup_Implementation(class ASFSWorldItemActor* ItemActor)
+{
+	AttemptItemPickup(ItemActor);
+}
+
+void USFSInventoryManager::Client_PerformInventoryAction_Implementation(const FInventoryActionData& ActionRequest)
+{
+	switch (ActionRequest.InventoryAction)
+	{
+	case EInventoryAction::MoveItem:
+		SwapItems(ActionRequest.FirstIndexRef, ActionRequest.SecondIndexRef);
+		UpdateClientEvent.Broadcast(ActionRequest.FirstIndexRef);
+		UpdateClientEvent.Broadcast(ActionRequest.SecondIndexRef);
+		break;
+	case EInventoryAction::RemoveItem:
+		RemoveItemFromInventory(ActionRequest.FirstIndexRef, ActionRequest.Quantity);
+		UpdateClientEvent.Broadcast(ActionRequest.FirstIndexRef);
+		break;
+	case EInventoryAction::SplitStack:
+		SplitStack(ActionRequest.FirstIndexRef, ActionRequest.Quantity);
+		UpdateClientEvent.Broadcast(ActionRequest.FirstIndexRef);
+		UpdateClientEvent.Broadcast(ActionRequest.SecondIndexRef);
+		break;
+	case EInventoryAction::Use:
+		UseItem(ActionRequest.FirstIndexRef);
+		UpdateClientEvent.Broadcast(ActionRequest.FirstIndexRef);
+		break;
+	case EInventoryAction::CombineStack:
+		CombineStack(ActionRequest.FirstIndexRef, ActionRequest.SecondIndexRef);
+		UpdateClientEvent.Broadcast(ActionRequest.FirstIndexRef);
+		UpdateClientEvent.Broadcast(ActionRequest.SecondIndexRef);
+		break;
+	default:
+		break;
+	}
+	UE_LOG(LogTemp, Log, TEXT("ClientInvAction"))
 }
 
 bool USFSInventoryManager::FindEmptySlot(int32& IndexRef)
@@ -166,7 +212,7 @@ bool USFSInventoryManager::FindValidStack(TSubclassOf<USFSItemBase> ItemClassToA
 {
 	IndexRef = InvArray.IndexOfByPredicate([&ItemClassToAdd, QuantityToAdd](const FInventoryStruct& InvItem)
 	{
-		return InvItem.ItemInstance ? (InvItem.ItemInstance->GetClass()->IsChildOf(ItemClassToAdd)) && (InvItem.Quantity + QuantityToAdd < InvItem.ItemInstance->GetMaxStackSize()) : false;
+		return InvItem.ItemInstance ? (InvItem.ItemInstance->GetClass()->IsChildOf(ItemClassToAdd)) && (InvItem.Quantity + QuantityToAdd <= InvItem.ItemInstance->GetMaxStackSize()) : false;
 	});
 	return (IndexRef != -1);
 }
@@ -190,32 +236,39 @@ void USFSInventoryManager::PerformInventoryAction(const FInventoryActionData& Ac
 	case EInventoryAction::SplitStack:
 		SplitStack(ActionRequest.FirstIndexRef, ActionRequest.Quantity);
 		break;
+	case EInventoryAction::Use:
+		UseItem(ActionRequest.FirstIndexRef);
+		break;
+	case EInventoryAction::CombineStack:
+		CombineStack(ActionRequest.FirstIndexRef, ActionRequest.SecondIndexRef);
+		break;
 	default:
 		break;
 	}
-
+	UE_LOG(LogTemp, Log, TEXT("ServerInvAction"))
+	Client_PerformInventoryAction(ActionRequest);
 }
 
-void USFSInventoryManager::Server_PerformInventoryAction_Implementation(const FInventoryActionData& InventoryAction)
+void USFSInventoryManager::Server_PerformInventoryAction_Implementation(const FInventoryActionData& ActionRequest)
 {
-	PerformInventoryAction(InventoryAction);
+	PerformInventoryAction(ActionRequest);
 }
 
-bool USFSInventoryManager::Server_PerformInventoryAction_Validate(const FInventoryActionData& InventoryAction)
+bool USFSInventoryManager::Server_PerformInventoryAction_Validate(const FInventoryActionData& ActionRequest)
 {
 	return true;
 }
 
 void USFSInventoryManager::AttemptItemPickup(ASFSWorldItemActor* ItemActor)
 {
-	if (GetOwnerRole() < ROLE_Authority)
+	if (GetOwnerRole() == ROLE_Authority)
 	{
-		Server_AttemptItemPickup(ItemActor);
-		return;
+		Client_AttemptItemPickup(ItemActor);
 	}
+
 	if (AddItemToInventory(ItemActor->GetItemClass()))
 	{
-		ItemActor->Destroy();
+
 	}
 }
 

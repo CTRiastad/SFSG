@@ -78,6 +78,9 @@ public:
 
 	int32 GetPropertyValue(EItemPropertyType ItemProperty);
 
+	UFUNCTION(BlueprintImplementableEvent)
+	void OnUsed();
+
 	UStaticMesh* GetWorldMesh();
 
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory")
