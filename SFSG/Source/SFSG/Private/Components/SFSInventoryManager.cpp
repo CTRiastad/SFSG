@@ -153,7 +153,7 @@ void USFSInventoryManager::CombineStack(int32 FirstIndexRef, int32 SecondIndexRe
 }
 
 // The client-side actions of SplitStack are already covered by existing functions which makes the creation of a Client_SplitStack RPC superfluous.
-void USFSInventoryManager::SplitStack(int32 IndexRef, int32 QuantityToSplit)
+int32 USFSInventoryManager::SplitStack(int32 IndexRef, int32 QuantityToSplit)
 {
 	int32 NewIndexRef;
 	if (FindEmptySlot(NewIndexRef))
@@ -162,6 +162,7 @@ void USFSInventoryManager::SplitStack(int32 IndexRef, int32 QuantityToSplit)
 		InvArray[NewIndexRef].Quantity = QuantityToSplit;
 		RemoveItemFromInventory(IndexRef, QuantityToSplit);
 	}
+	return NewIndexRef;
 }
 
 void USFSInventoryManager::Client_AttemptItemPickup_Implementation(class ASFSWorldItemActor* ItemActor)
@@ -171,6 +172,7 @@ void USFSInventoryManager::Client_AttemptItemPickup_Implementation(class ASFSWor
 
 void USFSInventoryManager::Client_PerformInventoryAction_Implementation(const FInventoryActionData& ActionRequest)
 {
+	int32 NewStackIndex;
 	switch (ActionRequest.InventoryAction)
 	{
 	case EInventoryAction::MoveItem:
@@ -183,9 +185,9 @@ void USFSInventoryManager::Client_PerformInventoryAction_Implementation(const FI
 		UpdateClientEvent.Broadcast(ActionRequest.FirstIndexRef);
 		break;
 	case EInventoryAction::SplitStack:
-		SplitStack(ActionRequest.FirstIndexRef, ActionRequest.Quantity);
+		NewStackIndex = SplitStack(ActionRequest.FirstIndexRef, ActionRequest.Quantity);
 		UpdateClientEvent.Broadcast(ActionRequest.FirstIndexRef);
-		UpdateClientEvent.Broadcast(ActionRequest.SecondIndexRef);
+		UpdateClientEvent.Broadcast(NewStackIndex);
 		break;
 	case EInventoryAction::Use:
 		UseItem(ActionRequest.FirstIndexRef);

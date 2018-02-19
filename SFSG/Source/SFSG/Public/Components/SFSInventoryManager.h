@@ -100,7 +100,7 @@ protected:
 	void CombineStack(int32 FirstIndexRef, int32 SecondIndexRef);
 
 	/** Splits an amount of an existing item stack into a new item stack **/
-	void SplitStack(int32 IndexRef, int32 QuantityToSplit);
+	int32 SplitStack(int32 IndexRef, int32 QuantityToSplit);
 
 	/** Server-authoritative item pickup function **/
 	UFUNCTION(Server, Reliable, WithValidation)
