@@ -25,6 +25,9 @@ protected:
 	UPROPERTY(BlueprintReadWrite, Category = "ItemSlot", meta = (ExposeOnSpawn = true))
 	class USFSSplitStackWidget* SplitStackWidget;
 
+	UPROPERTY(BlueprintReadWrite, Category = "ItemSlot", meta = (ExposeOnSpawn = true))
+	class ASFSContainerWorldActor* ContainerActor = nullptr;
+
 	virtual bool NativeOnDrop(const FGeometry& InGeometry, const FDragDropEvent& InDragDropEvent, UDragDropOperation* InOperation) override;
 
 	virtual FReply NativeOnPreviewMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;

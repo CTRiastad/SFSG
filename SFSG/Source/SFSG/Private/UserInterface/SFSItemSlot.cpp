@@ -16,6 +16,24 @@ bool USFSItemSlot::NativeOnDrop(const FGeometry& InGeometry, const FDragDropEven
 	USFSItemDragDrop* ItemDragDrop = Cast<USFSItemDragDrop>(InOperation);
 	if (ItemDragDrop)
 	{
+		if (ContainerActor)
+		{
+			if (ItemDragDrop->ContainerActor)
+			{
+				// Move item around container inventory
+			}
+			else
+			{
+				// Add item to Container
+			}
+		}
+
+		if (ItemDragDrop->ContainerActor && ItemDragDrop->ContainerActor != ContainerActor)
+		{
+			// Take Item from Container
+		}
+
+
 		FInventoryActionData ActionData;
 		ActionData.FirstIndexRef = ItemDragDrop->ItemSlot; 
 		ActionData.SecondIndexRef = ItemSlot;
@@ -59,6 +77,10 @@ void USFSItemSlot::NativeOnDragDetected(const FGeometry& InGeometry, const FPoin
 		USFSItemDragDrop* SomeDragDrop = NewObject<USFSItemDragDrop>();
 		SomeDragDrop->DefaultDragVisual = this;
 		SomeDragDrop->ItemSlot = ItemSlot;
+		if (ContainerActor)
+		{
+			SomeDragDrop->ContainerActor = ContainerActor;
+		}
 		OutOperation = SomeDragDrop;
 	}
 }
@@ -69,7 +91,33 @@ void USFSItemSlot::UpdateWidget()
 	{
 		return;
 	}
+	if (ContainerActor)
+	{
+		if (InventoryManager->GetContainerInventoryStruct(ItemSlot).ItemInstance)
+		{
+			FInvData InvData = InventoryManager->GetContainerInventoryStruct(ItemSlot).ItemInstance->GetInvData();
+			ItemIcon->SetBrushFromTexture(InvData.Icon);
+			ItemIcon->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
 
+			if (InventoryManager->GetContainerInventoryStruct(ItemSlot).Quantity > 1)
+			{
+				FFormatNamedArguments Arguments;
+				Arguments.Add(TEXT("ItemQuantity"), FText::AsNumber(InventoryManager->GetInventoryStruct(ItemSlot).Quantity));
+				ItemCount->SetText(FText::Format(LOCTEXT("ItemCountKey", "x{ItemQuantity}"), Arguments));
+				ItemCount->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+			}
+			else
+			{
+				ItemCount->SetVisibility(ESlateVisibility::Hidden);
+			}
+		}
+		else
+		{
+			ItemIcon->SetVisibility(ESlateVisibility::Hidden);
+			ItemCount->SetVisibility(ESlateVisibility::Hidden);
+		}
+		return;
+	}
 	if (InventoryManager->GetInventoryStruct(ItemSlot).ItemInstance)
 	{
 		FInvData InvData = InventoryManager->GetInventoryStruct(ItemSlot).ItemInstance->GetInvData();
@@ -93,6 +141,7 @@ void USFSItemSlot::UpdateWidget()
 		ItemIcon->SetVisibility(ESlateVisibility::Hidden);
 		ItemCount->SetVisibility(ESlateVisibility::Hidden);
 	}
+	return;
 }
 
 void USFSItemSlot::ReceiveSplitRequest(int32 QuantityToSplit)

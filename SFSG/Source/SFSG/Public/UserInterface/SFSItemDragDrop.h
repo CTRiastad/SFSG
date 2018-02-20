@@ -18,4 +18,7 @@ public:
 
 	UPROPERTY(BlueprintReadWrite, Category = "DragDrop", meta=(ExposeOnSpawn=true))
 	int32 ItemSlot;
+
+	UPROPERTY(BlueprintReadWrite, Category = "DragDrop", meta = (ExposeOnSpawn = true))
+	class ASFSContainerWorldActor* ContainerActor = nullptr;
 };

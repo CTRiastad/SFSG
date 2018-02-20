@@ -8,6 +8,8 @@
 #include "SFSInventoryManager.generated.h"
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FInventoryUpdateSignature, int32, UpdatedSlot);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FAccessedContainerSignature, class ASFSContainerWorldActor*, ContainerActor);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FContainerUpdateSignature, class ASFSContainerWorldActor*, ContainerActor, int32, UpdatedSlot);
 
 UENUM(BlueprintType)
 enum class EInventoryAction : uint8
@@ -17,18 +19,21 @@ enum class EInventoryAction : uint8
 	SplitStack,
 	Use,
 	CombineStack,
+	ContainerTake,
+	ContainerPlace,
 };
 
 USTRUCT(BlueprintType)
-struct FInventoryStruct
+struct FItemLocation
 {
 	GENERATED_BODY()
 
-	UPROPERTY(BlueprintReadOnly, Category = "Inventory")
-	class USFSItemBase* ItemInstance;
+	UPROPERTY(BlueprintReadWrite, Category = "Inventory")
+	TArray<FInventoryStruct>& ContainingArray;
 
-	UPROPERTY(BlueprintReadOnly, Category = "Inventory")
-	int32 Quantity;
+	UPROPERTY(BlueprintReadWrite, Category = "Inventory")
+	int32 IndexRef;
+
 };
 
 USTRUCT(BlueprintType)
@@ -49,7 +54,7 @@ struct FInventoryActionData
 	int32 Quantity = 1;
 
 	UPROPERTY(BlueprintReadWrite, Category = "Inventory")
-	AActor* ContainerActor = nullptr;
+	class ASFSContainerWorldActor* ContainerActor = nullptr;
 
 };
 
@@ -67,6 +72,9 @@ protected:
 	virtual void BeginPlay() override;
 
 	TArray<FInventoryStruct> InvArray;
+
+	UPROPERTY(Replicated)
+	class ASFSContainerWorldActor* ActiveContainer;
 
 	int32 InventorySize;
 
@@ -115,6 +123,9 @@ protected:
 	UFUNCTION(Client, Reliable)
 	void Client_PerformInventoryAction(const FInventoryActionData& InventoryAction);
 
+	UFUNCTION(Client, Reliable)
+	void Client_AccessContainer(class ASFSContainerWorldActor* ContainerActor);
+
 public:	
 
 	UFUNCTION(BlueprintCallable, Category = "Inventory")
@@ -122,14 +133,26 @@ public:
 
 	void AttemptItemPickup(class ASFSWorldItemActor* ItemActor);
 
+	void AccessContainer(class ASFSContainerWorldActor* ContainerActor);
+
 	/** Used to get information for UI **/
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory")
 	FInventoryStruct& GetInventoryStruct(int32 IndexRef);
+
+	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Inventory")
+	FInventoryStruct& GetContainerInventoryStruct(int32 IndexRef);
 	
-	/** Event delegate for updating UI **/
+	/** Event delegate for updating local UI **/
 	UPROPERTY(BlueprintAssignable, Category = "Inventory")
 	FInventoryUpdateSignature UpdateClientEvent;
 
+	/** Event delegate for accessing containers */
+	UPROPERTY(BlueprintAssignable, Category = "Inventory")
+	FAccessedContainerSignature AccessedContainerEvent;
+
+	/** Event delegate for updating container UI **/
+	UPROPERTY(BlueprintAssignable, Category = "Inventory")
+	FContainerUpdateSignature UpdateContainerEvent;
 
 	FORCEINLINE void ClientUpdate(int32 IndexRef) 
 	{

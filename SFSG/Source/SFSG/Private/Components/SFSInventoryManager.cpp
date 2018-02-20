@@ -3,6 +3,7 @@
 #include "SFSInventoryManager.h"
 #include "SFSWorldItemActor.h"
 #include "SFSItemBase.h"
+#include "SFSContainerWorldActor.h"
 #include "Net/UnrealNetwork.h"
 
 static int32 DebugDestroyWorldItem = 0;
@@ -25,7 +26,7 @@ USFSInventoryManager::USFSInventoryManager()
 void USFSInventoryManager::BeginPlay()
 {
 	Super::BeginPlay();
-	
+
 	InitializeArray();
 }
 
@@ -165,6 +166,11 @@ int32 USFSInventoryManager::SplitStack(int32 IndexRef, int32 QuantityToSplit)
 	return NewIndexRef;
 }
 
+void USFSInventoryManager::Client_AccessContainer_Implementation(class ASFSContainerWorldActor* ContainerActor)
+{
+	AccessedContainerEvent.Broadcast(ContainerActor);
+}
+
 void USFSInventoryManager::Client_AttemptItemPickup_Implementation(class ASFSWorldItemActor* ItemActor)
 {
 	AttemptItemPickup(ItemActor);
@@ -248,7 +254,7 @@ void USFSInventoryManager::PerformInventoryAction(const FInventoryActionData& Ac
 		break;
 	}
 	UE_LOG(LogTemp, Log, TEXT("ServerInvAction"))
-	Client_PerformInventoryAction(ActionRequest);
+		Client_PerformInventoryAction(ActionRequest);
 }
 
 void USFSInventoryManager::Server_PerformInventoryAction_Implementation(const FInventoryActionData& ActionRequest)
@@ -272,6 +278,14 @@ void USFSInventoryManager::AttemptItemPickup(ASFSWorldItemActor* ItemActor)
 	{
 
 	}
+
+}
+
+void USFSInventoryManager::AccessContainer(class ASFSContainerWorldActor* ContainerActor)
+{
+	UE_LOG(LogTemp, Log, TEXT("Accessed Container"))
+	ActiveContainer = ContainerActor;
+	Client_AccessContainer(ContainerActor);
 }
 
 void USFSInventoryManager::Server_AttemptItemPickup_Implementation(ASFSWorldItemActor* ItemActor)
@@ -287,4 +301,16 @@ bool USFSInventoryManager::Server_AttemptItemPickup_Validate(ASFSWorldItemActor*
 FInventoryStruct& USFSInventoryManager::GetInventoryStruct(int32 IndexRef)
 {
 	return InvArray[IndexRef];
+}
+
+FInventoryStruct& USFSInventoryManager::GetContainerInventoryStruct(int32 IndexRef)
+{
+	return ActiveContainer->InvArray[IndexRef];
+}
+
+void USFSInventoryManager::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const 
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+
+	DOREPLIFETIME(USFSInventoryManager, ActiveContainer);
 }

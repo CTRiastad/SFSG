@@ -40,9 +40,11 @@ protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Item Properties")
 	class UTexture2D* ItemIcon;
 
+	/** Does this item have a distinct appearance in the world */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Item Properties")
 	bool bIsWorldItem;
 
+	/** If it has a distinct appearance; set with this */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Item Properties", meta = (EditCondition = bIsWorldItem))
 	class UStaticMesh* WorldMesh;
 
@@ -58,6 +60,7 @@ protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Item Properties")
 	EItemCategory ItemCategory;
 	
+	/** Allows the addition of extra item properties via FItemProperties */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Item Properties")
 	bool bHasComplexProperties;
 

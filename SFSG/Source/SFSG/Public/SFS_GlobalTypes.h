@@ -44,6 +44,18 @@ struct FItemProperties
 
 };
 
+USTRUCT(BlueprintType)
+struct FInventoryStruct
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadOnly, Category = "Inventory")
+	class USFSItemBase* ItemInstance;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Inventory")
+	int32 Quantity;
+};
+
 UCLASS()
 class SFSG_API USFS_GlobalTypes : public UObject
 {
